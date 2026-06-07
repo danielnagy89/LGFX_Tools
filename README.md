@@ -1,4 +1,4 @@
-# LimiTools — Transform Reset Buttons
+# LGFX_Tools — Transform Reset Buttons
 
 ![LimiTools_TRB_gif](https://github.com/user-attachments/assets/7db3de86-813e-42a5-a527-60fd66d8449e)<br>
 _Tested on Unity 6, can't guarantee compatibility with previous versions._<br>
