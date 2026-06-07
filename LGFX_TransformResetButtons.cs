@@ -1,23 +1,27 @@
-/// LimiTools TransformResetButtons - Creates a Scene view Overlay Toolbar with Position, Rotation, Scale resets
-/// Direction, layout design and tweaks by Daniel Nagy, code executed by Claude.ai 🤖
-/// Supports multi-select, edit "enabledButtonColor" values to style colors
+/// LGFX_Tools TransformResetButtons - Creates a Scene view Overlay Toolbar with Position, Rotation, Scale resets and Move to view button
+/// Direction, layout design and tweaks by Daniel Nagy, code executed by Claude.ai
+/// You got this from https://github.com/danielnagy89/LGFX_Tools
+/// Supports multi-select, edit "enabledButtonColor" values to style
+/// tested on Unity6, can't guarantee compatibility with previous versions, use at your own risk.
+/// added Move to View button
 
 using UnityEngine;
 using UnityEditor;
 
 [InitializeOnLoad]
-public class TransformResetButtons
+public class LGFX_TransformResetButtons
 {
-    private static Vector2 windowOffset = new Vector2(-1, -1); // Offset from corner
+    private static Vector2 windowOffset;
     private static SnapCorner snapCorner = SnapCorner.TopRight; // Which corner to anchor to
     private static bool isDragging = false;
     private static Vector2 dragOffset;
     private static bool isVisible = true;
+    private static bool isInitialized = false;
     private enum SnapCorner { TopLeft, TopRight, BottomLeft, BottomRight }
     private static readonly Color enabledButtonColor = new Color(0.5f, 1.2f, 1.5f);
     private static readonly Color disabledButtonColor = new Color(0.3f, 0.3f, 0.3f);
     
-    static TransformResetButtons()
+    static LGFX_TransformResetButtons()
     {
         SceneView.duringSceneGui += OnSceneGUI;
     }
@@ -47,13 +51,14 @@ public class TransformResetButtons
         float spacing = 4f;
         float padding = 4f;
         float headerHeight = 16f;
-        float totalHeight = headerHeight + (buttonSize * 3) + (spacing * 2) + (padding * 3);
+        float totalHeight = headerHeight + (buttonSize * 4) + (spacing * 3) + (padding * 3);
         float totalWidth = buttonSize + (padding * 2);
 
-        if (windowOffset.x < 0)
+        if (!isInitialized)
         {
             windowOffset = new Vector2(totalWidth + 2f, (sceneView.position.height / 2f) - (totalHeight / 2f));
             snapCorner = SnapCorner.TopRight;
+            isInitialized = true;
         }
 
         // Calculate actual position from corner
@@ -63,12 +68,9 @@ public class TransformResetButtons
         windowPosition.x = Mathf.Clamp(windowPosition.x, 0, sceneView.position.width - totalWidth);
         windowPosition.y = Mathf.Clamp(windowPosition.y, 0, sceneView.position.height - totalHeight);
 
-        // Background panel
-        Rect panelRect = new Rect(windowPosition.x, windowPosition.y, totalWidth, totalHeight);
-
         GUI.color = new Color(1f, 1f, 1f, 1f); // Last value = transparency
 
-        GUI.Box(panelRect, "", GUI.skin.window);
+        GUI.Box(new Rect(windowPosition.x, windowPosition.y, totalWidth, totalHeight), "", GUI.skin.window);
 
         // Draggable header
         Rect headerRect = new Rect(windowPosition.x, windowPosition.y, totalWidth, headerHeight);
@@ -141,16 +143,16 @@ public class TransformResetButtons
         float xPos = windowPosition.x + padding;
         float yPos = windowPosition.y + headerHeight + padding;
 
-        // Check states
+        // Check states — single pass over selection for all three transform checks
         bool hasSelection = Selection.gameObjects.Length > 0;
-        bool posDefault = IsDefault(TransformType.Position);
-        bool rotDefault = IsDefault(TransformType.Rotation);
-        bool scaleDefault = IsDefault(TransformType.Scale);
+        bool posDefault = true, rotDefault = true, scaleDefault = true;
+        if (hasSelection)
+            CheckDefaults(out posDefault, out rotDefault, out scaleDefault);
 
         // Position button
         DrawResetButton(new Rect(xPos, yPos, buttonSize, buttonSize), 
                        EditorGUIUtility.IconContent("MoveTool"), "Reset Position", 
-                       posDefault, hasSelection, 
+                       hasSelection && !posDefault, 
                        () => ResetTransforms(TransformType.Position));
         
         yPos += buttonSize + spacing;
@@ -158,7 +160,7 @@ public class TransformResetButtons
         // Rotation button
         DrawResetButton(new Rect(xPos, yPos, buttonSize, buttonSize), 
                        EditorGUIUtility.IconContent("RotateTool"), "Reset Rotation", 
-                       rotDefault, hasSelection, 
+                       hasSelection && !rotDefault, 
                        () => ResetTransforms(TransformType.Rotation));
         
         yPos += buttonSize + spacing;
@@ -166,28 +168,30 @@ public class TransformResetButtons
         // Scale button
         DrawResetButton(new Rect(xPos, yPos, buttonSize, buttonSize), 
                        EditorGUIUtility.IconContent("ScaleTool"), "Reset Scale", 
-                       scaleDefault, hasSelection, 
+                       hasSelection && !scaleDefault, 
                        () => ResetTransforms(TransformType.Scale));
+
+        yPos += buttonSize + spacing;
+
+        // Move to View button — always enabled when something is selected
+        // Note: ExecuteMenuItem path must match Unity's menu exactly; may break across Unity versions
+        DrawResetButton(new Rect(xPos, yPos, buttonSize, buttonSize), 
+                       EditorGUIUtility.IconContent("d_ViewToolOrbit"), "Move to View  (Ctrl+Alt+F)", 
+                       hasSelection, 
+                       () => EditorApplication.ExecuteMenuItem("GameObject/Move To View"));
 
         Handles.EndGUI();
     }
 
-    private static void DrawResetButton(Rect rect, GUIContent content, string tooltip, bool isDefault, bool hasSelection, System.Action onClick)
+    private static void DrawResetButton(Rect rect, GUIContent content, string tooltip, bool enabled, System.Action onClick)
     {
-        bool enabled = !isDefault && hasSelection;
-        
         Color originalBg = GUI.backgroundColor;
         GUI.backgroundColor = enabled ? enabledButtonColor : disabledButtonColor;
-        
         GUI.enabled = enabled;
-        
-        // Set tooltip
         content.tooltip = tooltip;
         
         if (GUI.Button(rect, content))
-        {
             onClick?.Invoke();
-        }
         
         GUI.enabled = true;
         GUI.backgroundColor = originalBg;
@@ -241,26 +245,23 @@ public class TransformResetButtons
         return SnapCorner.TopLeft;
     }
 
-    private static bool IsDefault(TransformType type)
+    // Single pass over selection checks all three transform states at once
+    private static void CheckDefaults(out bool posDefault, out bool rotDefault, out bool scaleDefault)
     {
+        posDefault = true;
+        rotDefault = true;
+        scaleDefault = true;
+
         foreach (GameObject obj in Selection.gameObjects)
         {
             if (obj == null) continue;
-            
-            switch (type)
-            {
-                case TransformType.Position:
-                    if (obj.transform.localPosition != Vector3.zero) return false;
-                    break;
-                case TransformType.Rotation:
-                    if (obj.transform.localRotation != Quaternion.identity) return false;
-                    break;
-                case TransformType.Scale:
-                    if (obj.transform.localScale != Vector3.one) return false;
-                    break;
-            }
+            if (obj.transform.localPosition != Vector3.zero)    posDefault   = false;
+            if (obj.transform.localRotation != Quaternion.identity) rotDefault = false;
+            if (obj.transform.localScale    != Vector3.one)     scaleDefault = false;
+
+            // Early out once all three are dirty
+            if (!posDefault && !rotDefault && !scaleDefault) return;
         }
-        return true;
     }
 
     private static void ResetTransforms(TransformType type)
@@ -295,5 +296,4 @@ public class TransformResetButtons
         Rotation,
         Scale
     }
-
 }
