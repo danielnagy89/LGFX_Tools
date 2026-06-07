@@ -12,3 +12,12 @@ _Tested on Unity 6, can't guarantee compatibility with previous versions._<br>
 
 ## Maybe later
 • make the tint editable in Preferences > Colors
+
+# LGFX_Tools — CookieScroller
+<img width="480" height="270" alt="LGFX_CookieScroller" src="https://github.com/user-attachments/assets/6689e2d0-3755-446f-9dea-2f3e38a618e0" /><br>
+_Tested on Unity 6 URP, can't guarantee compatibility with previous versions._<br>
+---
+• Scrolls Directional Light Cookie's coordinates for a simple animated gobo effect.<br>
+
+## To install– just drop the script in any script folder.
+
